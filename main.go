@@ -17,8 +17,10 @@ import (
 )
 
 const (
-	currentVersion = "v1.0.0"
-	updateURL      = "http://127.0.0.1:8080/manifest.json"
+	currentVersion     = "v1.0.0"
+	updateURL          = "http://127.0.0.1:8080/manifest.json"
+	defaultGitHubOwner = "arunsivasankaran"
+	defaultGitHubRepo  = "nametag-challenge"
 )
 
 type manifest struct {
@@ -65,7 +67,66 @@ func normalizeVersion(v string) string {
 	v = strings.TrimSpace(v)
 	v = strings.TrimPrefix(v, "v")
 	v = strings.TrimPrefix(v, "V")
+	v = strings.TrimPrefix(v, "go")
+	v = strings.TrimPrefix(v, "Go")
+	v = strings.TrimPrefix(v, "release-")
 	return v
+}
+
+func githubTagsURL() string {
+	owner := strings.TrimSpace(os.Getenv("GITHUB_OWNER"))
+	if owner == "" {
+		owner = defaultGitHubOwner
+	}
+	repo := strings.TrimSpace(os.Getenv("GITHUB_REPO"))
+	if repo == "" {
+		repo = defaultGitHubRepo
+	}
+	return fmt.Sprintf("https://api.github.com/repos/%s/%s/tags", owner, repo)
+}
+
+func latestTagFromTagsResponse(body []byte) (string, error) {
+	var tags []struct {
+		Name string `json:"name"`
+	}
+	if err := json.Unmarshal(body, &tags); err != nil {
+		return "", err
+	}
+	if len(tags) == 0 {
+		return "", errors.New("no tags found")
+	}
+	return tags[0].Name, nil
+}
+
+func getLatestGitHubTag() (string, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, githubTagsURL(), nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "nametag-cli")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("github tags API returned status %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	latest, err := latestTagFromTagsResponse(body)
+	if err != nil {
+		return "", err
+	}
+	return latest, nil
 }
 
 func main() {
@@ -90,30 +151,11 @@ func main() {
 }
 
 func checkForUpdate(current string) (bool, error) {
-	resp, err := http.Get(updateURL)
+	latestTag, err := getLatestGitHubTag()
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("unexpected status: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, err
-	}
-
-	var m manifest
-	if err := json.Unmarshal(body, &m); err != nil {
-		return false, err
-	}
-	if !m.isValid() {
-		return false, errors.New("remote manifest is invalid")
-	}
-
-	return compareVersions(current, m.Version) < 0, nil
+	return compareVersions(current, latestTag) < 0, nil
 }
 
 func runUpdate() error {
