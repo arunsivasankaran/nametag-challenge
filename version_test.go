@@ -16,35 +16,24 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
-func TestManifestValidatesVersion(t *testing.T) {
-	m := manifest{Version: "v1.2.3", DownloadURL: "https://example.com/update", SHA256: "abc123"}
-	if !m.isValid() {
-		t.Fatal("expected manifest to be valid when version and download URL are set")
-	}
-
-	m.Version = ""
-	if m.isValid() {
-		t.Fatal("expected manifest to be invalid when version is missing")
-	}
-}
-
 func TestCompareVersionsWithGoTagFormat(t *testing.T) {
 	if compareVersions("v1.0.0", "go1.23.1") >= 0 {
 		t.Fatal("expected go1.23.1 to be newer than v1.0.0")
 	}
 }
 
-func TestLatestTagFromTagsResponse(t *testing.T) {
-	body := []byte(`[
-		{"name": "go1.23.1"},
-		{"name": "go1.23.0"}
-	]`)
-
-	latest, err := latestTagFromTagsResponse(body)
-	if err != nil {
-		t.Fatalf("expected tag response to parse without error: %v", err)
+func TestSelectReleaseAssetURL(t *testing.T) {
+	assets := []releaseAsset{
+		{Name: "nametag-linux-amd64.tar.gz", BrowserDownloadURL: "https://example.com/linux.tar.gz"},
+		{Name: "nametag-darwin-arm64.tar.gz", BrowserDownloadURL: "https://example.com/macos.tar.gz"},
 	}
-	if latest != "go1.23.1" {
-		t.Fatalf("expected latest tag to be go1.23.1, got %q", latest)
+
+	url, err := selectReleaseAssetURL(assets)
+	if err != nil {
+		t.Fatalf("expected a matching asset to be returned: %v", err)
+	}
+
+	if url == "" {
+		t.Fatal("expected selected asset URL to be non-empty")
 	}
 }

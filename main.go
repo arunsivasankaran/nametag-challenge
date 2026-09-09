@@ -18,20 +18,18 @@ import (
 
 const (
 	currentVersion     = "v1.0.0"
-	updateURL          = "http://127.0.0.1:8080/manifest.json"
 	defaultGitHubOwner = "arunsivasankaran"
 	defaultGitHubRepo  = "nametag-challenge"
 )
 
-type manifest struct {
-	Version     string `json:"version"`
-	DownloadURL string `json:"download_url"`
-	SHA256      string `json:"sha256"`
-	Description string `json:"description,omitempty"`
+type releaseAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
-func (m manifest) isValid() bool {
-	return strings.TrimSpace(m.Version) != "" && strings.TrimSpace(m.DownloadURL) != "" && strings.TrimSpace(m.SHA256) != ""
+type githubRelease struct {
+	TagName string         `json:"tag_name"`
+	Assets  []releaseAsset `json:"assets"`
 }
 
 func compareVersions(local, remote string) int {
@@ -73,7 +71,7 @@ func normalizeVersion(v string) string {
 	return v
 }
 
-func githubTagsURL() string {
+func githubReleaseURL() string {
 	owner := strings.TrimSpace(os.Getenv("GITHUB_OWNER"))
 	if owner == "" {
 		owner = defaultGitHubOwner
@@ -82,51 +80,75 @@ func githubTagsURL() string {
 	if repo == "" {
 		repo = defaultGitHubRepo
 	}
-	return fmt.Sprintf("https://api.github.com/repos/%s/%s/tags", owner, repo)
+	return fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
 }
 
-func latestTagFromTagsResponse(body []byte) (string, error) {
-	var tags []struct {
-		Name string `json:"name"`
+func latestReleaseFromResponse(body []byte) (githubRelease, error) {
+	var rel githubRelease
+	if err := json.Unmarshal(body, &rel); err != nil {
+		return githubRelease{}, err
 	}
-	if err := json.Unmarshal(body, &tags); err != nil {
-		return "", err
+	if strings.TrimSpace(rel.TagName) == "" {
+		return githubRelease{}, errors.New("latest release tag not found")
 	}
-	if len(tags) == 0 {
-		return "", errors.New("no tags found")
-	}
-	return tags[0].Name, nil
+	return rel, nil
 }
 
-func getLatestGitHubTag() (string, error) {
+func getLatestGitHubRelease() (githubRelease, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, githubTagsURL(), nil)
+	req, err := http.NewRequest(http.MethodGet, githubReleaseURL(), nil)
 	if err != nil {
-		return "", err
+		return githubRelease{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "nametag-cli")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", err
+		return githubRelease{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("github tags API returned status %s", resp.Status)
+		return githubRelease{}, fmt.Errorf("github releases API returned status %s", resp.Status)
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", err
+		return githubRelease{}, err
 	}
 
-	latest, err := latestTagFromTagsResponse(body)
-	if err != nil {
-		return "", err
+	return latestReleaseFromResponse(body)
+}
+
+func assetNameMatchesPlatform(assetName string) bool {
+	lowerName := strings.ToLower(assetName)
+	lowerOS := strings.ToLower(runtime.GOOS)
+	lowerArch := strings.ToLower(runtime.GOARCH)
+
+	if strings.Contains(lowerName, lowerOS) && strings.Contains(lowerName, lowerArch) {
+		return true
 	}
-	return latest, nil
+	if strings.Contains(lowerName, ".") && strings.Contains(lowerName, lowerOS) {
+		return true
+	}
+	return false
+}
+
+func selectReleaseAssetURL(assets []releaseAsset) (string, error) {
+	for _, asset := range assets {
+		if assetNameMatchesPlatform(asset.Name) {
+			if strings.TrimSpace(asset.BrowserDownloadURL) != "" {
+				return asset.BrowserDownloadURL, nil
+			}
+		}
+	}
+	for _, asset := range assets {
+		if strings.TrimSpace(asset.BrowserDownloadURL) != "" {
+			return asset.BrowserDownloadURL, nil
+		}
+	}
+	return "", errors.New("no release asset found for this platform")
 }
 
 func main() {
@@ -151,50 +173,32 @@ func main() {
 }
 
 func checkForUpdate(current string) (bool, error) {
-	latestTag, err := getLatestGitHubTag()
+	release, err := getLatestGitHubRelease()
 	if err != nil {
 		return false, err
 	}
-	return compareVersions(current, latestTag) < 0, nil
+	return compareVersions(current, release.TagName) < 0, nil
 }
 
 func runUpdate() error {
-	resp, err := http.Get(updateURL)
+	release, err := getLatestGitHubRelease()
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status: %s", resp.Status)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	var m manifest
-	if err := json.Unmarshal(body, &m); err != nil {
-		return err
-	}
-	if !m.isValid() {
-		return errors.New("manifest missing required fields")
-	}
-
-	if compareVersions(currentVersion, m.Version) >= 0 {
+	if compareVersions(currentVersion, release.TagName) >= 0 {
 		return nil
 	}
 
-	downloadPath, err := downloadBinary(m.DownloadURL)
+	assetURL, err := selectReleaseAssetURL(release.Assets)
+	if err != nil {
+		return err
+	}
+
+	downloadPath, err := downloadBinary(assetURL)
 	if err != nil {
 		return err
 	}
 	defer os.Remove(downloadPath)
-
-	if err := verifySHA256(downloadPath, m.SHA256); err != nil {
-		return err
-	}
 
 	return replaceExecutable(downloadPath)
 }

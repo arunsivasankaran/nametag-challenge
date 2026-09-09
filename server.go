@@ -8,21 +8,21 @@ import (
 )
 
 func startMockServer() {
-	manifest := manifest{
-		Version:     "v1.1.0",
-		DownloadURL: "http://127.0.0.1:8080/nametag.bin",
-		SHA256:      "",
-		Description: "New release",
+	release := githubRelease{
+		TagName: "v1.1.0",
+		Assets: []releaseAsset{
+			{Name: "nametag-linux-amd64.tar.gz", BrowserDownloadURL: "http://127.0.0.1:8080/nametag.bin"},
+		},
 	}
 
-	_, err := json.Marshal(manifest)
+	_, err := json.Marshal(release)
 	if err != nil {
 		panic(err)
 	}
 
-	http.HandleFunc("/manifest.json", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/releases/latest", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(manifest)
+		_ = json.NewEncoder(w).Encode(release)
 	})
 
 	http.HandleFunc("/nametag.bin", func(w http.ResponseWriter, r *http.Request) {
@@ -34,6 +34,6 @@ func startMockServer() {
 		_, _ = w.Write(content)
 	})
 
-	fmt.Println("serving mock update server on :8080")
+	fmt.Println("serving mock release server on :8080")
 	_ = http.ListenAndServe(":8080", nil)
 }
