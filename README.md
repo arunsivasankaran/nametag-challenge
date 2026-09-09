@@ -1,33 +1,32 @@
 # Nametag Self-Updating Go CLI
 
-This project is a small Go application that demonstrates a self-updating CLI. At startup, it checks a remote update manifest, compares the current version to the newest published version, downloads the newer binary if needed, validates the binary checksum, and replaces the running executable.
+NOTE: This project depends on released posted to https://github.com/arunsivasankaran/nametag-challenge (public repo)
 
-The purpose of the project is to model the kind of update flow used by desktop applications and deployment tools: fetch new code, validate it, install it safely, and recover if anything fails.
+This project is a small Go application that demonstrates a self-updating CLI. At startup, it checks the latest public GitHub release for a configured repository, compares the local version to the newest published tag, downloads the matching release asset for the current OS and architecture, and replaces the running executable when a newer version is available.
+
+The purpose of the project is to model the kind of update flow used by desktop applications and deployment tools: fetch the newest release, choose the correct asset, install it safely, and recover if the replacement fails.
 
 ## File structure
 
 - `main.go` - the core CLI application and updater logic
   - version comparison
-  - remote manifest fetch
-  - checksum validation
-  - download flow
-  - binary replacement logic
-  - basic rollback behavior
-- `server.go` - a simple local mock HTTP server used to simulate an update source
-  - `/manifest.json` returns a JSON version manifest
-  - `/nametag.bin` serves the downloaded binary payload
-- `version_test.go` - unit tests for version comparison and manifest validation
+  - GitHub release discovery
+  - platform-specific asset selection
+  - binary download and install flow
+  - rollback behavior
+- `build.sh` - builds binaries for Windows, Linux, and macOS
+- `version_test.go` - unit tests for version comparison and release asset selection
 - `go.mod` - Go module definition
-- `README.md` - project explanation and run instructions
+- `README.md` - project overview and usage instructions
 
 ## How it works
 
 1. The app starts and prints its current version.
-2. It requests a manifest from the configured update URL.
-3. It compares the current binary version to the newest remote version.
+2. It calls the GitHub Releases API for the configured repository.
+3. It compares the current binary version to the newest remote tag.
 4. If the remote version is newer:
+   - selects the release asset that matches the current OS and architecture
    - downloads the replacement binary to a temp location
-   - verifies its SHA256 checksum
    - renames the current binary to a backup
    - swaps in the new binary
    - removes the backup after a successful install
@@ -68,9 +67,7 @@ dist/
   nametag-darwin-arm64
 ```
 
-### 2. Build the project for local development
-
-If you just want a single local binary:
+### 2. Build a local binary for development
 
 ```bash
 go build .
@@ -79,14 +76,12 @@ go build .
 ### 3. Run the app
 
 ```bash
+export GITHUB_OWNER=your-org
+export GITHUB_REPO=your-repo
 go run .
 ```
 
-This starts the CLI and checks for a newer version from GitHub Releases.
-
-### 4. Run the mock update server
-
-This project can also be paired with the mock release server in `server.go` for local testing scenarios. In a realistic setup, the app is expected to check a public GitHub repository instead of the local mock server.
+If the environment variables are absent, the app falls back to the default repository config in the code.
 
 ## Testing
 
@@ -99,18 +94,18 @@ go test ./...
 This validates:
 
 - version comparison logic
-- GitHub release asset selection behavior
-- Go tag format handling
+- GitHub release tag parsing
+- platform-specific asset selection
 
 ## Notes
 
 This is a minimal but production-minded MVP. A real-world version would likely add:
 
 - signed release checks
-- stronger cross-platform installation logic
+- stronger cross-platform install safety
 - more robust rollback and restart behavior
-- a proper release server or artifact repository
-- logging and telemetry
+- richer logging and telemetry
+- a more explicit release asset naming convention
 
 ## Example update workflow
 
@@ -119,11 +114,11 @@ A typical flow for this project looks like this:
 ```text
 Current binary: v1.0.0
 Latest GitHub release: v1.1.0
-Download matching asset for current OS/arch
-Validate the downloaded payload
+Select asset for current OS/arch
+Download new binary
 Backup old binary
 Replace active binary
-Restart or continue with new version
+Continue with updated version
 ```
 
 This keeps the challenge focused on the core idea: a program that updates itself safely.

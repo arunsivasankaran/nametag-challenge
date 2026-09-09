@@ -1,8 +1,6 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -245,21 +243,6 @@ func executableName() string {
 	return name
 }
 
-func verifySHA256(path, expected string) error {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-
-	hash := sha256.Sum256(content)
-	actual := hex.EncodeToString(hash[:])
-	if !strings.EqualFold(actual, strings.TrimSpace(expected)) {
-		return fmt.Errorf("checksum mismatch: expected %s, got %s", strings.TrimSpace(expected), actual)
-	}
-
-	return nil
-}
-
 func replaceExecutable(newBinary string) error {
 	currentExec, err := os.Executable()
 	if err != nil {
@@ -290,8 +273,4 @@ func restoreFromBackup(currentExec, backupPath string) error {
 	}
 	_ = os.Remove(currentExec)
 	return os.Rename(backupPath, currentExec)
-}
-
-func init() {
-	_ = time.Second
 }
