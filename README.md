@@ -40,39 +40,93 @@ The purpose of the project is to model the kind of update flow used by desktop a
 - Go 1.22 or newer installed
 - A terminal with access to the project directory
 
-### 1. Build the project
+### 1. Build all platform binaries
 
-From the project root:
-
-```bash
-go build ./...
-```
-
-This compiles the CLI and any related Go files in the module.
-
-### 2. Run the app
+From the project root, run:
 
 ```bash
-go run .
+chmod +x build.sh
+./build.sh
 ```
 
-This starts the CLI and checks for a newer version from the configured update URL.
+This compiles the project for the following targets and writes the artifacts to the `dist/` directory:
 
-### 3. Run the mock update server
+- Windows amd64
+- Linux amd64
+- Linux arm64
+- macOS amd64
+- macOS arm64
 
-The app is configured to look for updates at:
+Example output:
 
 ```text
-http://127.0.0.1:8080/manifest.json
+dist/
+  nametag-windows-amd64.exe
+  nametag-linux-amd64
+  nametag-linux-arm64
+  nametag-darwin-amd64
+  nametag-darwin-arm64
 ```
 
-To simulate the update service locally, run the mock server in a separate terminal:
+### 2. Build the project for local development
+
+If you just want a single local binary:
+
+```bash
+go build .
+```
+
+### 3. Run the app
 
 ```bash
 go run .
 ```
 
-However, since the app itself is the CLI and not the HTTP server, the project is currently intended for a demo flow where the update endpoint is served by a separate component. In a fuller implementation, you would typically run the server in a separate process or a dedicated release host.
+This starts the CLI and checks for a newer version from GitHub Releases.
+
+### 4. Run the mock update server
+
+This project can also be paired with the mock release server in `server.go` for local testing scenarios. In a realistic setup, the app is expected to check a public GitHub repository instead of the local mock server.
+
+## Testing
+
+Run the automated tests:
+
+```bash
+go test ./...
+```
+
+This validates:
+
+- version comparison logic
+- GitHub release asset selection behavior
+- Go tag format handling
+
+## Notes
+
+This is a minimal but production-minded MVP. A real-world version would likely add:
+
+- signed release checks
+- stronger cross-platform installation logic
+- more robust rollback and restart behavior
+- a proper release server or artifact repository
+- logging and telemetry
+
+## Example update workflow
+
+A typical flow for this project looks like this:
+
+```text
+Current binary: v1.0.0
+Latest GitHub release: v1.1.0
+Download matching asset for current OS/arch
+Validate the downloaded payload
+Backup old binary
+Replace active binary
+Restart or continue with new version
+```
+
+This keeps the challenge focused on the core idea: a program that updates itself safely.
 
 ## Testing
 

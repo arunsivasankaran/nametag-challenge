@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	currentVersion     = "v1.0.1"
+	currentVersion     = "v1.0.0"
 	defaultGitHubOwner = "arunsivasankaran"
 	defaultGitHubRepo  = "nametag-challenge"
 )
