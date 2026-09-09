@@ -1,6 +1,6 @@
 # Nametag Self-Updating Go CLI
 
-NOTE: This project depends on released posted to https://github.com/arunsivasankaran/nametag-challenge (public repo)
+NOTE: This project depends on released posted to <https://github.com/arunsivasankaran/nametag-challenge> (public repo)
 
 This project is a small Go application that demonstrates a self-updating CLI. At startup, it checks the latest public GitHub release for a configured repository, compares the local version to the newest published tag, downloads the matching release asset for the current OS and architecture, and replaces the running executable when a newer version is available.
 
@@ -76,26 +76,8 @@ go build .
 ### 3. Run the app
 
 ```bash
-export GITHUB_OWNER=your-org
-export GITHUB_REPO=your-repo
 go run .
 ```
-
-If the environment variables are absent, the app falls back to the default repository config in the code.
-
-## Testing
-
-Run the automated tests:
-
-```bash
-go test ./...
-```
-
-This validates:
-
-- version comparison logic
-- GitHub release tag parsing
-- platform-specific asset selection
 
 ## Notes
 
@@ -113,7 +95,7 @@ A typical flow for this project looks like this:
 
 ```text
 Current binary: v1.0.0
-Latest GitHub release: v1.1.0
+Latest GitHub release: v1.0.1
 Select asset for current OS/arch
 Download new binary
 Backup old binary
@@ -121,43 +103,4 @@ Replace active binary
 Continue with updated version
 ```
 
-This keeps the challenge focused on the core idea: a program that updates itself safely.
-
-## Testing
-
-Run the automated tests:
-
-```bash
-go test ./...
-```
-
-This validates:
-
-- version comparison logic
-- manifest validation logic
-
-## Notes
-
-This is a minimal but production-minded MVP. A real-world version would likely add:
-
-- signed release checks
-- stronger cross-platform installation logic
-- more robust rollback and restart behavior
-- a proper release server or artifact repository
-- logging and telemetry
-
-## Example update workflow
-
-A typical flow for this project looks like this:
-
-```text
-Current binary: v1.0.0
-Remote manifest: v1.1.0
-Download new binary
-Validate checksum
-Backup old binary
-Replace active binary
-Restart or continue with new version
-```
-
-This keeps the challenge focused on the core idea: a program that updates itself safely.
+I have created 2 releases in github for this repo (listed above). You download the a version from the older release and test the update mechanism.
